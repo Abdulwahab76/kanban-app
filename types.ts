@@ -17,3 +17,9 @@ export type ColumnType = {
 export type KanbanData = {
     columns: Record<string, ColumnType>
 }
+// Add this type for edit mode
+export type EditMode = {
+    cardId: string;
+    columnId: string;
+    isEditing: boolean;
+};

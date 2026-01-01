@@ -1,64 +1,146 @@
-import { useState } from 'react'
-import type { KanbanData } from '../../types'
-import { initialData } from '../data/initialData'
+// hooks/useKanban.ts
+import { useState } from 'react';
+import type { KanbanData, EditMode } from '../../types';
+import { initialData } from '../data/initialData';
 
-export function useKanban() {
-    const [data, setData] = useState<KanbanData>(initialData)
-
-    const moveCard = (cardId: string, toColumnId: string) => {
-        setData(prev => {
-            let fromColumnId: string | null = null
-            let movingCard = null
-
-            // find card + source column
-            for (const column of Object.values(prev.columns)) {
-                const card = column.cards.find(c => c.id === cardId)
-                if (card) {
-                    fromColumnId = column.id
-                    movingCard = card
-                    break
-                }
-
-            }
-
-            if (!fromColumnId || !movingCard || fromColumnId === toColumnId) {
-                return prev
-            }
-
-            return {
-                columns: {
-                    ...prev.columns,
-                    [fromColumnId]: {
-                        ...prev.columns[fromColumnId],
-                        cards: prev.columns[fromColumnId].cards.filter(
-                            c => c.id !== cardId
-                        ),
-                    },
-                    [toColumnId]: {
-                        ...prev.columns[toColumnId],
-                        cards: [...prev.columns[toColumnId].cards, { ...movingCard, progress: toColumnId === 'done' ? 100 : toColumnId === 'doing' ? 52 : 0 }],
-                    },
-                },
-            }
-        })
-    }
+export const useKanban = () => {
+    const [data, setData] = useState<KanbanData>(initialData);
+    const [editMode, setEditMode] = useState<EditMode | null>(null);
+    const [editTitle, setEditTitle] = useState('');
 
     const addCard = (columnId: string, title: string) => {
         const newCard = {
-            id: crypto.randomUUID(), // ✅ correct way
+            id: Date.now().toString(),
             title,
-        }
+            progress: 0,
+            tags: [],
+            avatars: []
+        };
 
         setData(prev => ({
+            ...prev,
             columns: {
                 ...prev.columns,
                 [columnId]: {
                     ...prev.columns[columnId],
-                    cards: [...prev.columns[columnId].cards, newCard],
-                },
-            },
-        }))
-    }
+                    cards: [...prev.columns[columnId].cards, newCard]
+                }
+            }
+        }));
+    };
 
-    return { data, moveCard, addCard }
-}
+    const moveCard = (cardId: string, targetColumnId: string) => {
+        setData(prev => {
+            // Find the source column and card
+            let sourceColumnId = '';
+            let cardToMove = null;
+
+            Object.entries(prev.columns).forEach(([colId, column]) => {
+                const cardIndex = column.cards.findIndex(card => card.id === cardId);
+                if (cardIndex > -1) {
+                    sourceColumnId = colId;
+                    cardToMove = column.cards[cardIndex];
+                }
+            });
+
+            if (!cardToMove || sourceColumnId === targetColumnId) return prev;
+
+            // Remove from source column
+            const updatedSourceCards = prev.columns[sourceColumnId].cards
+                .filter(card => card.id !== cardId);
+
+            // Add to target column
+            const updatedTargetCards = [
+                ...prev.columns[targetColumnId].cards,
+                cardToMove
+            ];
+
+            return {
+                ...prev,
+                columns: {
+                    ...prev.columns,
+                    [sourceColumnId]: {
+                        ...prev.columns[sourceColumnId],
+                        cards: updatedSourceCards
+                    },
+                    [targetColumnId]: {
+                        ...prev.columns[targetColumnId],
+                        cards: updatedTargetCards
+                    }
+                }
+            };
+        });
+    };
+
+    // hooks/useKanban.ts
+    const deleteCard = (cardId: string, columnId: string) => {
+        console.log('Deleting card:', cardId, 'from column:', columnId); // Debug log
+
+        setData(prev => {
+            const column = prev.columns[columnId];
+            if (!column) {
+                console.error('Column not found:', columnId);
+                return prev;
+            }
+
+            const updatedCards = column.cards.filter(card => card.id !== cardId);
+            console.log('Updated cards:', updatedCards);
+
+            return {
+                ...prev,
+                columns: {
+                    ...prev.columns,
+                    [columnId]: {
+                        ...column,
+                        cards: updatedCards
+                    }
+                }
+            };
+        });
+    };
+
+    const startEdit = (cardId: string, columnId: string, currentTitle: string) => {
+        setEditMode({ cardId, columnId, isEditing: true });
+        setEditTitle(currentTitle);
+    };
+
+    const saveEdit = () => {
+        if (!editMode || !editTitle.trim()) return;
+
+        setData(prev => ({
+            ...prev,
+            columns: {
+                ...prev.columns,
+                [editMode.columnId]: {
+                    ...prev.columns[editMode.columnId],
+                    cards: prev.columns[editMode.columnId].cards.map(card =>
+                        card.id === editMode.cardId
+                            ? { ...card, title: editTitle.trim() }
+                            : card
+                    )
+                }
+            }
+        }));
+
+        setEditMode(null);
+        setEditTitle('');
+    };
+
+    const cancelEdit = () => {
+        setEditMode(null);
+        setEditTitle('');
+    };
+
+    return {
+        data,
+        addCard,
+        moveCard,
+        deleteCard,
+        startEdit,
+        saveEdit,
+        cancelEdit,
+        editMode,
+        editTitle,
+        setEditTitle
+    };
+};
