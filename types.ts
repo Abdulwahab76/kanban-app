@@ -1,25 +1,45 @@
-export type CardType = {
-    id: string
-    title: string
-    progress?: number
-    tags?: string[]
-    avatars?: string[]
+// types.ts
+export interface CardType {
+    id: string;
+    title: string;
+    description?: string;
+    progress: number;
+    tags: string[];
+    avatars: string[];
+    due_date?: string;
+    created_at?: string;
+    updated_at?: string;
+    position?: number;
+    column_id?: string;
 }
 
-
-export type ColumnType = {
-    id: string
-    title: string
-    cards: CardType[]
+export interface ColumnType {
+    id: string;
+    title: string;
+    cards: CardType[];
+    color?: string;
+    position?: number;
+    board_id?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
-
-export type KanbanData = {
-    columns: Record<string, ColumnType>
+export interface BoardType {
+    id: string;
+    title: string;
+    description?: string;
+    owner_id: string;
+    background_color?: string;
+    is_public: boolean;
+    created_at: string;
+    updated_at: string;
 }
-// Add this type for edit mode
-export type EditMode = {
-    cardId: string;
-    columnId: string;
-    isEditing: boolean;
-};
+
+export interface ProfileType {
+    id: string;
+    email: string;
+    full_name?: string;
+    avatar_url?: string;
+    created_at: string;
+    updated_at: string;
+}
