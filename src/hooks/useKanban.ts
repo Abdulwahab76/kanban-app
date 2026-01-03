@@ -1,146 +1,398 @@
-// hooks/useKanban.ts
-import { useState } from 'react';
-import type { KanbanData, EditMode } from '../../types';
-import { initialData } from '../data/initialData';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 
-export const useKanban = () => {
-    const [data, setData] = useState<KanbanData>(initialData);
-    const [editMode, setEditMode] = useState<EditMode | null>(null);
-    const [editTitle, setEditTitle] = useState('');
+export const useSupabaseKanban = (boardId: string | null) => {
+    const [board, setBoard] = useState<any>(null);
+    const [columns, setColumns] = useState<any[]>([]);
+    const [cards, setCards] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    const addCard = (columnId: string, title: string) => {
-        const newCard = {
-            id: Date.now().toString(),
-            title,
-            progress: 0,
-            tags: [],
-            avatars: []
-        };
+    // Fetch data once on mount and when boardId changes
+    const fetchData = useCallback(async () => {
+        if (!boardId) {
+            setLoading(false);
+            return;
+        }
 
-        setData(prev => ({
-            ...prev,
-            columns: {
-                ...prev.columns,
-                [columnId]: {
-                    ...prev.columns[columnId],
-                    cards: [...prev.columns[columnId].cards, newCard]
-                }
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Fetch board
+            const { data: boardData, error: boardError } = await supabase
+                .from('boards')
+                .select('*')
+                .eq('id', boardId)
+                .single();
+
+            if (boardError) throw boardError;
+            setBoard(boardData);
+
+            // Fetch columns
+            const { data: columnsData, error: columnsError } = await supabase
+                .from('columns')
+                .select('*')
+                .eq('board_id', boardId)
+                .order('position');
+
+            if (columnsError) throw columnsError;
+            setColumns(columnsData || []);
+
+            // Fetch cards for all columns
+            if (columnsData && columnsData.length > 0) {
+                const columnIds = columnsData.map(col => col.id);
+                const { data: cardsData, error: cardsError } = await supabase
+                    .from('cards')
+                    .select('*')
+                    .in('column_id', columnIds)
+                    .order('position');
+
+                if (cardsError) throw cardsError;
+                setCards(cardsData || []);
             }
-        }));
-    };
 
-    const moveCard = (cardId: string, targetColumnId: string) => {
-        setData(prev => {
-            // Find the source column and card
-            let sourceColumnId = '';
-            let cardToMove = null;
+        } catch (err) {
+            console.error('Error fetching data:', err);
+            setError(err instanceof Error ? err.message : 'Unknown error');
+        } finally {
+            setLoading(false);
+        }
+    }, [boardId]);
 
-            Object.entries(prev.columns).forEach(([colId, column]) => {
-                const cardIndex = column.cards.findIndex(card => card.id === cardId);
-                if (cardIndex > -1) {
-                    sourceColumnId = colId;
-                    cardToMove = column.cards[cardIndex];
-                }
-            });
+    // Fetch data only on mount and when boardId changes
+    useEffect(() => {
+        fetchData();
 
-            if (!cardToMove || sourceColumnId === targetColumnId) return prev;
+        // No real-time subscriptions for now to prevent loops
+    }, [fetchData]);
 
-            // Remove from source column
-            const updatedSourceCards = prev.columns[sourceColumnId].cards
-                .filter(card => card.id !== cardId);
+    // ✅ ADDED: Move card function
+    const moveCard = useCallback(async (cardId: string, targetColumnId: string, newPosition?: number) => {
+        try {
+            console.log('📦 Moving card:', cardId, 'to column:', targetColumnId);
 
-            // Add to target column
-            const updatedTargetCards = [
-                ...prev.columns[targetColumnId].cards,
-                cardToMove
-            ];
+            // Find the card to move
+            const cardToMove = cards.find(c => c.id === cardId);
+            if (!cardToMove) {
+                throw new Error('Card not found');
+            }
 
-            return {
-                ...prev,
-                columns: {
-                    ...prev.columns,
-                    [sourceColumnId]: {
-                        ...prev.columns[sourceColumnId],
-                        cards: updatedSourceCards
-                    },
-                    [targetColumnId]: {
-                        ...prev.columns[targetColumnId],
-                        cards: updatedTargetCards
+            const sourceColumnId = cardToMove.column_id;
+
+            console.log('Source column:', sourceColumnId, 'Target column:', targetColumnId);
+
+            // If moving within same column, just update position
+            if (sourceColumnId === targetColumnId) {
+                console.log('Moving within same column');
+
+                // Get all cards in this column
+                const columnCards = cards
+                    .filter(c => c.column_id === targetColumnId && c.id !== cardId)
+                    .sort((a, b) => a.position - b.position);
+
+                // Calculate new position
+                const position = newPosition || columnCards.length + 1;
+
+                // Update positions in database
+                const updates = [];
+
+                // First, update the moved card
+                updates.push(
+                    supabase
+                        .from('cards')
+                        .update({
+                            position: position,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', cardId)
+                );
+
+                // Update other cards positions
+                let currentPos = 1;
+                for (const card of columnCards) {
+                    if (currentPos === position) {
+                        currentPos++; // Skip the position where we inserted the moved card
                     }
+                    updates.push(
+                        supabase
+                            .from('cards')
+                            .update({
+                                position: currentPos,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', card.id)
+                    );
+                    currentPos++;
                 }
-            };
-        });
-    };
 
-    // hooks/useKanban.ts
-    const deleteCard = (cardId: string, columnId: string) => {
-        console.log('Deleting card:', cardId, 'from column:', columnId); // Debug log
+                await Promise.all(updates);
 
-        setData(prev => {
-            const column = prev.columns[columnId];
-            if (!column) {
-                console.error('Column not found:', columnId);
-                return prev;
-            }
+            } else {
+                console.log('Moving to different column');
 
-            const updatedCards = column.cards.filter(card => card.id !== cardId);
-            console.log('Updated cards:', updatedCards);
+                // Moving to different column
 
-            return {
-                ...prev,
-                columns: {
-                    ...prev.columns,
-                    [columnId]: {
-                        ...column,
-                        cards: updatedCards
+                // Step 1: Get cards from source column (excluding the moved card)
+                const sourceColumnCards = cards
+                    .filter(c => c.column_id === sourceColumnId && c.id !== cardId)
+                    .sort((a, b) => a.position - b.position);
+
+                // Step 2: Get cards from target column
+                const targetColumnCards = cards
+                    .filter(c => c.column_id === targetColumnId)
+                    .sort((a, b) => a.position - b.position);
+
+                // Step 3: Calculate new position in target column
+                const position = newPosition || targetColumnCards.length + 1;
+
+                // Step 4: Update source column cards positions
+                const updates = [];
+                let sourcePos = 1;
+                for (const card of sourceColumnCards) {
+                    updates.push(
+                        supabase
+                            .from('cards')
+                            .update({
+                                position: sourcePos,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', card.id)
+                    );
+                    sourcePos++;
+                }
+
+                // Step 5: Update target column cards positions
+                let targetPos = 1;
+                for (const card of targetColumnCards) {
+                    if (targetPos === position) {
+                        // Insert the moved card at this position
+                        updates.push(
+                            supabase
+                                .from('cards')
+                                .update({
+                                    column_id: targetColumnId,
+                                    position: targetPos,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', cardId)
+                        );
+                        targetPos++;
                     }
+
+                    updates.push(
+                        supabase
+                            .from('cards')
+                            .update({
+                                position: targetPos,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', card.id)
+                    );
+                    targetPos++;
                 }
-            };
-        });
-    };
 
-    const startEdit = (cardId: string, columnId: string, currentTitle: string) => {
-        setEditMode({ cardId, columnId, isEditing: true });
-        setEditTitle(currentTitle);
-    };
-
-    const saveEdit = () => {
-        if (!editMode || !editTitle.trim()) return;
-
-        setData(prev => ({
-            ...prev,
-            columns: {
-                ...prev.columns,
-                [editMode.columnId]: {
-                    ...prev.columns[editMode.columnId],
-                    cards: prev.columns[editMode.columnId].cards.map(card =>
-                        card.id === editMode.cardId
-                            ? { ...card, title: editTitle.trim() }
-                            : card
-                    )
+                // If position is at the end
+                if (position > targetColumnCards.length) {
+                    updates.push(
+                        supabase
+                            .from('cards')
+                            .update({
+                                column_id: targetColumnId,
+                                position: position,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', cardId)
+                    );
                 }
+
+                await Promise.all(updates);
             }
-        }));
 
-        setEditMode(null);
-        setEditTitle('');
+            console.log('✅ Card moved successfully');
+
+            // Refresh data
+            await fetchData();
+
+        } catch (err) {
+            console.error('❌ Error moving card:', err);
+            throw err;
+        }
+    }, [cards, fetchData]);
+
+    // ✅ ADDED: Simple move card function (alternative)
+    const moveCardSimple = useCallback(async (cardId: string, targetColumnId: string) => {
+        try {
+            console.log('Simple move:', cardId, '→', targetColumnId);
+
+            // Find card
+            const card = cards.find(c => c.id === cardId);
+            if (!card) {
+                throw new Error('Card not found');
+            }
+
+            // Get max position in target column
+            const targetColumnCards = cards.filter(c => c.column_id === targetColumnId);
+            const maxPosition = targetColumnCards.length > 0
+                ? Math.max(...targetColumnCards.map(c => c.position))
+                : 0;
+
+            const newPosition = maxPosition + 1;
+
+            // Update in database
+            const { error } = await supabase
+                .from('cards')
+                .update({
+                    column_id: targetColumnId,
+                    position: newPosition,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', cardId);
+
+            if (error) throw error;
+
+            console.log(`✅ Card moved to position ${newPosition} in column ${targetColumnId}`);
+
+            // Update local state immediately
+            setCards(prev => prev.map(c =>
+                c.id === cardId
+                    ? { ...c, column_id: targetColumnId, position: newPosition }
+                    : c
+            ));
+
+        } catch (err) {
+            console.error('Move error:', err);
+            throw err;
+        }
+    }, [cards]);
+
+    // Add column - simple version
+    const addColumn = async (title: string) => {
+        if (!boardId) throw new Error('No board selected');
+
+        try {
+            const maxPosition = Math.max(...columns.map(c => c.position), 0);
+
+            const { data, error } = await supabase
+                .from('columns')
+                .insert({
+                    board_id: boardId,
+                    title,
+                    position: maxPosition + 1,
+                    color: '#e5e7eb'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Update local state
+            setColumns(prev => [...prev, data]);
+            return data;
+
+        } catch (err) {
+            console.error('Error adding column:', err);
+            throw err;
+        }
     };
 
-    const cancelEdit = () => {
-        setEditMode(null);
-        setEditTitle('');
+    // Add card - simple version
+    const addCard = async (columnId: string, title: string) => {
+        try {
+            const columnCards = cards.filter(c => c.column_id === columnId);
+            const maxPosition = Math.max(...columnCards.map(c => c.position), 0);
+
+            const { data, error } = await supabase
+                .from('cards')
+                .insert({
+                    column_id: columnId,
+                    title,
+                    position: maxPosition + 1,
+                    progress: 0
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Update local state
+            setCards(prev => [...prev, data]);
+            return data;
+
+        } catch (err) {
+            console.error('Error adding card:', err);
+            throw err;
+        }
+    };
+
+    // Get cards for column
+    const getCardsForColumn = useCallback((columnId: string) => {
+        return cards
+            .filter(card => card.column_id === columnId)
+            .sort((a, b) => a.position - b.position)
+            .map(card => ({
+                ...card,
+                tags: [],
+                avatars: []
+            }));
+    }, [cards]);
+
+    // Delete card
+    const deleteCard = async (cardId: string) => {
+        try {
+            const { error } = await supabase
+                .from('cards')
+                .delete()
+                .eq('id', cardId);
+
+            if (error) throw error;
+
+            // Update local state
+            setCards(prev => prev.filter(card => card.id !== cardId));
+
+        } catch (err) {
+            console.error('Error deleting card:', err);
+            throw err;
+        }
+    };
+
+    // Update card
+    const updateCard = async (cardId: string, updates: any) => {
+        try {
+            const { error } = await supabase
+                .from('cards')
+                .update({
+                    ...updates,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', cardId);
+
+            if (error) throw error;
+
+            // Update local state
+            setCards(prev => prev.map(card =>
+                card.id === cardId ? { ...card, ...updates } : card
+            ));
+
+        } catch (err) {
+            console.error('Error updating card:', err);
+            throw err;
+        }
     };
 
     return {
-        data,
+        board,
+        columns,
+        cards,
+        loading,
+        error,
+        addColumn,
         addCard,
-        moveCard,
+        moveCard,          // Full version with positioning
+        moveCardSimple,    // Simple version (recommended for drag-drop)
         deleteCard,
-        startEdit,
-        saveEdit,
-        cancelEdit,
-        editMode,
-        editTitle,
-        setEditTitle
+        updateCard,
+        getCardsForColumn,
+        refetch: fetchData
     };
 };
