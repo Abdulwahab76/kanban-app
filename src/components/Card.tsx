@@ -1,7 +1,7 @@
 // components/Card.tsx
- import { useDraggable } from '@dnd-kit/core';
+import { useDraggable } from '@dnd-kit/core';
 import { useState } from 'react';
-import { Edit2, Trash2, Calendar, Tag, Users, CheckCircle } from 'lucide-react';
+import { Edit2, Trash2, Calendar, Tag, CheckCircle } from 'lucide-react';
 import type { CardType } from '../../types';
 
 type CardProps = {
@@ -11,7 +11,7 @@ type CardProps = {
     onDelete: (cardId: string) => Promise<void>;
 };
 
-export default function Card({ card, columnId, onUpdate, onDelete }: CardProps) {
+export default function Card({ card, onUpdate,  }: CardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(card.title);
     const [editDescription, setEditDescription] = useState(card.description || '');
@@ -56,15 +56,15 @@ export default function Card({ card, columnId, onUpdate, onDelete }: CardProps) 
         }
     };
 
-    const handleDelete = async () => {
-        try {
-            await onDelete(card.id);
-            setShowDeleteConfirm(false);
-        } catch (err) {
-            console.error('Error deleting card:', err);
-            alert('Failed to delete card');
-        }
-    };
+    // const handleDelete = async () => {
+    //     try {
+    //         await onDelete(card.id);
+    //         setShowDeleteConfirm(false);
+    //     } catch (err) {
+    //         console.error('Error deleting card:', err);
+    //         alert('Failed to delete card');
+    //     }
+    // };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {

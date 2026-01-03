@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 export default function AuthComponent() {
@@ -7,51 +7,7 @@ export default function AuthComponent() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Auto-login on mount for testing
-    useEffect(() => {
-        handleAutoLogin();
-    }, []);
 
-    const handleAutoLogin = async () => {
-        try {
-            setLoading(true);
-
-            // Try to sign in
-            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                email: 'test@example.com',
-                password: 'password123'
-            });
-
-            if (signInError) {
-                // If user doesn't exist, sign up
-                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                    email: 'test@example.com',
-                    password: 'password123',
-                    options: {
-                        emailRedirectTo: window.location.origin
-                    }
-                });
-
-                if (signUpError) throw signUpError;
-
-                // After sign up, try sign in again
-                const { error: secondSignInError } = await supabase.auth.signInWithPassword({
-                    email: 'test@example.com',
-                    password: 'password123'
-                });
-
-                if (secondSignInError) throw secondSignInError;
-            }
-
-            console.log('✅ Auto-login successful!');
-
-        } catch (err: any) {
-            console.error('Auto-login error:', err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleManualLogin = async () => {
         try {
@@ -65,7 +21,7 @@ export default function AuthComponent() {
 
             if (error) throw error;
 
-            console.log('✅ Manual login successful!');
+            console.log('✅ Manual login successful!', data);
 
         } catch (err: any) {
             console.error('Login error:', err);
@@ -90,7 +46,7 @@ export default function AuthComponent() {
 
             if (error) throw error;
 
-            console.log('✅ Sign up successful! Check email.');
+            console.log('✅ Sign up successful! Check email.', data);
             alert('Sign up successful! Check your email for confirmation (if required).');
 
         } catch (err: any) {
@@ -116,18 +72,6 @@ export default function AuthComponent() {
                         {error}
                     </div>
                 )}
-
-                <div className="mb-6">
-                    <p className="text-sm text-gray-600 mb-4">
-                        Use these test credentials or create your own:
-                    </p>
-                    <div className="bg-gray-100 p-4 rounded-lg mb-4">
-                        <p className="font-mono text-sm">
-                            Email: test@example.com<br />
-                            Password: password123
-                        </p>
-                    </div>
-                </div>
 
                 <div className="space-y-4">
                     <div>
