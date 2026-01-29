@@ -11,7 +11,7 @@ type CardProps = {
     onDelete: (cardId: string) => Promise<void>;
 };
 
-export default function Card({ card, onUpdate,  }: CardProps) {
+export default function Card({ card, onUpdate, onDelete }: CardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(card.title);
     const [editDescription, setEditDescription] = useState(card.description || '');
@@ -321,7 +321,7 @@ export default function Card({ card, onUpdate,  }: CardProps) {
                             <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                            onClick={() => setShowDeleteConfirm(true)}
+                            onClick={() => onDelete(card.id)}
                             className="p-1.5 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition"
                             title="Delete"
                         >

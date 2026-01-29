@@ -1,5 +1,5 @@
 // components/Column.tsx
- import Card from './Card';
+import Card from './Card';
 import { useState, type JSX } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { Plus, MoreVertical, X } from 'lucide-react';
@@ -10,18 +10,25 @@ type ColumnProps = {
     addCard: (columnId: string, title: string) => Promise<void>;
     onUpdateCard: (cardId: string, updates: any) => Promise<void>;
     onDeleteCard: (cardId: string) => Promise<void>;
+    removeColumn: (columnId: string) => Promise<void>;
+    updateColumn: (
+        columnId: string,
+        updates: Partial<ColumnType>
+    ) => Promise<void>
 };
 
 export default function Column({
     column,
     addCard,
     onUpdateCard,
-    onDeleteCard
+    onDeleteCard,
+    removeColumn,
+    updateColumn
 }: ColumnProps): JSX.Element {
     const [newTitle, setNewTitle] = useState('');
     const [isAdding, setIsAdding] = useState(false);
     const [showOptions, setShowOptions] = useState(false);
-
+    const [showColorPicker, setShowColorPicker] = useState(false);
     const { setNodeRef, isOver } = useDroppable({
         id: column.id
     });
@@ -37,6 +44,8 @@ export default function Column({
         } catch (err) {
             console.error('Error adding card:', err);
             alert('Failed to add card');
+            setIsAdding(false);
+        } finally {
             setIsAdding(false);
         }
     };
@@ -63,7 +72,6 @@ export default function Column({
 
     const handleDeleteCard = async (cardId: string) => {
         if (!window.confirm('Delete this card?')) return;
-
         try {
             await onDeleteCard(cardId);
         } catch (err) {
@@ -71,14 +79,42 @@ export default function Column({
             alert('Failed to delete card');
         }
     };
+    const handleUpdateColumn = async (value: string) => {
+        console.log(value, 'vale==');
+        if (value.startsWith('#')) { // Update color                 
+            try {
+                await updateColumn(column.id, {
+                    color: value
+                });
 
-    const columnColor = column.color || '#e5e7eb';
+                setShowColorPicker(false);
+            } catch (err) {
+                console.error('Error updating column color:', err);
+                alert('Failed to update column color');
+            }
+            return;
+        }
+        const newTitle = prompt('Enter new column title:', column.title);
+        if (newTitle !== null && newTitle.trim() !== '') {
+            try {
+                await updateColumn(column.id, {
+                    title: newTitle.trim()
+                });
+            } catch (err) {
+                console.error('Error updating column:', err);
+                alert('Failed to update column');
+            }
+        }
+
+    }
+    const columnColor = column.color;
 
     return (
         <div
             ref={setNodeRef}
-            className={`flex-shrink-0 w-80 rounded-2xl flex flex-col transition-all ${isOver ? 'scale-[1.02]' : ''}`}
+            className={`w-80 rounded-2xl bg-gray-200 flex flex-col transition-all ${isOver ? 'scale-[1.02]' : ''}`}
         >
+
             {/* Column Header */}
             <div
                 className="rounded-t-2xl p-4 flex justify-between items-center relative"
@@ -103,14 +139,50 @@ export default function Column({
 
                     {showOptions && (
                         <div className="absolute right-0 top-10 bg-white rounded-lg shadow-lg border border-gray-200 z-20 w-48">
-                            <button className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">
+                            <button onClick={() => handleUpdateColumn('')} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">
                                 Edit Column
                             </button>
-                            <button className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">
+                            <button onClick={() => setShowColorPicker(prev => !prev)} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">
                                 Change Color
                             </button>
-                            <button className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 border-t border-gray-200">
+                            <button onClick={() => removeColumn(column.id)} className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 border-t border-gray-200">
                                 Delete Column
+                            </button>
+                        </div>
+                    )}
+
+                    {showColorPicker && (
+                        <div className='absolute right-0 top-10 z-50 bg-white shadow-xl p-3 rounded-lg border border-gray-200 w-52'>
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-medium">Column Color</span>
+                                <button onClick={() => setShowColorPicker(false)} className="text-gray-400 hover:text-gray-600">
+                                    ×
+                                </button>
+                            </div>
+
+                            <input
+                                type="color"
+                                value={column.color || '#e5e7eb'}
+                                onChange={(e) => handleUpdateColumn(e.target.value)}
+                                className="w-full h-10 mb-3 cursor-pointer"
+                            />
+
+                            <div className="grid grid-cols-4 gap-2">
+                                {['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'].map(color => (
+                                    <button
+                                        key={color}
+                                        onClick={() => handleUpdateColumn(color)}
+                                        className="w-full aspect-square rounded hover:scale-105 transition-transform"
+                                        style={{ backgroundColor: color }}
+                                    />
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => handleUpdateColumn('#e5e7eb')}
+                                className="w-full mt-2 py-1.5 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                            >
+                                Default Color
                             </button>
                         </div>
                     )}
@@ -153,13 +225,12 @@ export default function Column({
                         </button>
                     ) : (
                         <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                            <textarea
+                            <input
                                 value={newTitle}
                                 onChange={(e) => setNewTitle(e.target.value)}
                                 onKeyDown={handleKeyPress}
                                 placeholder="Enter a title for this card..."
                                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                rows={3}
                                 autoFocus
                             />
 
@@ -187,10 +258,10 @@ export default function Column({
                                     </button>
                                     <button
                                         onClick={handleAdd}
-                                        disabled={isAdding || !newTitle.trim()}
+                                        disabled={!newTitle.trim()}
                                         className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                     >
-                                        {isAdding ? 'Adding...' : 'Add Card'}
+                                        {isAdding ? 'Add Card' : 'Add Card'}
                                     </button>
                                 </div>
                             </div>
