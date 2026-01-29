@@ -1,9 +1,10 @@
 // types.ts
+// types.ts
 export interface CardType {
     id: string;
     title: string;
     description?: string;
-    progress: number;
+    progress?: number;  // ✅ Now optional
     tags: string[];
     avatars: string[];
     due_date?: string;
@@ -12,7 +13,6 @@ export interface CardType {
     position?: number;
     column_id?: string;
 }
-
 export interface ColumnType {
     id: string;
     title: string;
