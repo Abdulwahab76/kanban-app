@@ -77,7 +77,7 @@ export default function AuthComponent() {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: 'https://tmwykbkytxdxcrfycboj.supabase.co/auth/v1/callback'
+                    redirectTo: window.location.origin
                 }
 
             });
