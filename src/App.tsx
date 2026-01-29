@@ -6,16 +6,16 @@ import { DndContext, type DragEndEvent, PointerSensor, useSensor } from '@dnd-ki
 import { supabase } from './lib/supabase';
 import { useSupabaseKanban } from './hooks/useKanban';
 import AuthComponent from './components/Auth';
+import { ErrorDisplay, LoadingScreen } from './components/ScreenStatus';
+import { BoardSelectionScreen } from './components/BoardSelectionScreen';
+import { Header } from './components/layout/Header';
+import { Footer } from './components/layout/Footer';
 
 export default function App(): JSX.Element {
-  // Authentication
   const { user, loading: authLoading } = useAuth();
-
-  // Board management
   const [boards, setBoards] = useState<any[]>([]);
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
 
-  // Kanban data
   const {
     board: currentBoard,
     columns,
@@ -23,18 +23,17 @@ export default function App(): JSX.Element {
     error,
     addColumn,
     addCard,
-    moveCardSimple, // Using the simple version
+    moveCardSimple,
     updateCard,
     deleteCard,
     getCardsForColumn,
-    refetch
+    refetch,
+    removeColumn,
+    updateColumn
   } = useSupabaseKanban(selectedBoardId);
 
-  // DnD sensor
   const sensor = useSensor(PointerSensor, {
-    activationConstraint: {
-      distance: 8,
-    },
+    activationConstraint: { distance: 8 },
   });
 
   // Fetch user's boards
@@ -58,7 +57,6 @@ export default function App(): JSX.Element {
       if (error) throw error;
       setBoards(data || []);
 
-      // Auto-select first board
       if (data && data.length > 0 && !selectedBoardId) {
         setSelectedBoardId(data[0].id);
       }
@@ -67,41 +65,20 @@ export default function App(): JSX.Element {
     }
   };
 
-  // ✅ UPDATED: Handle drag end with moveCardSimple
+  // Handle drag end
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    console.log('🎯 Drag end event:', {
-      activeId: active.id,
-      overId: over?.id
-    });
-
-    if (!over || !selectedBoardId) {
-      console.log('No valid drop target');
-      return;
-    }
+    if (!over || !selectedBoardId) return;
 
     const activeCardId = active.id as string;
     const overColumnId = over.id as string;
 
     try {
-      console.log(`Moving card ${activeCardId} to column ${overColumnId}`);
-
-      // Use the simple move function
       await moveCardSimple(activeCardId, overColumnId);
-
-      console.log('✅ Drag & drop completed successfully');
-
-      // Optional: Show success feedback
-      // You could add a toast notification here
-
     } catch (err: any) {
-      console.error('❌ Drag & drop failed:', err);
-
-      // Show user-friendly error
+      console.error('Drag & drop failed:', err);
       alert(`Failed to move card: ${err.message || 'Please try again'}`);
-
-      // Refresh data to restore correct state
       await refetch();
     }
   };
@@ -114,20 +91,12 @@ export default function App(): JSX.Element {
     if (!title?.trim()) return;
 
     try {
-      // First ensure profile exists
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id!,
-          email: user.email!,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'id'
-        });
-
-      if (profileError) {
-        console.warn('Profile warning:', profileError.message);
-      }
+      // Ensure profile exists
+      await supabase.from('profiles').upsert({
+        id: user.id!,
+        email: user.email!,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
 
       // Create board
       const { data, error } = await supabase
@@ -144,29 +113,11 @@ export default function App(): JSX.Element {
 
       setBoards(prev => [data, ...prev]);
       setSelectedBoardId(data.id);
-
     } catch (err) {
       console.error('Error creating board:', err);
       alert('Failed to create board');
     }
   };
-
-  // Add column
-  const handleAddColumn = async () => {
-    if (!selectedBoardId) return;
-
-    const title = prompt('Enter column title:');
-    if (!title?.trim()) return;
-
-    try {
-      await addColumn(title.trim());
-    } catch (err) {
-      console.error('Error adding column:', err);
-      alert('Failed to add column');
-    }
-  };
-
-  // Add card
   const handleAddCard = async (columnId: string, title: string) => {
     if (!selectedBoardId) return;
 
@@ -178,36 +129,14 @@ export default function App(): JSX.Element {
     }
   };
 
-  // Update card
-  const handleUpdateCard = async (cardId: string, updates: any) => {
-    try {
-      await updateCard(cardId, updates);
-    } catch (err) {
-      console.error('Error updating card:', err);
-      throw err;
-    }
-  };
-
-  // Delete card
-  const handleDeleteCard = async (cardId: string) => {
-    try {
-      await deleteCard(cardId);
-    } catch (err) {
-      console.error('Error deleting card:', err);
-      throw err;
-    }
+  // Handle logout
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   // Loading state
   if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   // Authentication required
@@ -218,160 +147,109 @@ export default function App(): JSX.Element {
   // Board selection screen
   if (!selectedBoardId) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <header className="mb-8">
-            <h1 className="text-3xl font-bold">Your Kanban Boards</h1>
-            <p className="text-gray-600">Select a board or create a new one</p>
-          </header>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Create Board Card */}
-            <div
-              className="bg-white rounded-xl p-6 shadow cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-500 transition"
-              onClick={handleCreateBoard}
-            >
-              <div className="text-center py-8">
-                <div className="text-4xl mb-4">+</div>
-                <h3 className="font-semibold">Create New Board</h3>
-              </div>
-            </div>
-
-            {/* Existing Boards */}
-            {boards.map(board => (
-              <div
-                key={board.id}
-                className="bg-white rounded-xl p-6 shadow hover:shadow-lg transition cursor-pointer"
-                onClick={() => setSelectedBoardId(board.id)}
-              >
-                <h3 className="font-bold text-lg mb-2">{board.title}</h3>
-                <p className="text-gray-600 text-sm">
-                  {board.is_public ? 'Public' : 'Private'} • Created by you
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <BoardSelectionScreen
+        boards={boards}
+        onCreateBoard={handleCreateBoard}
+        onSelectBoard={setSelectedBoardId}
+        user={user}
+      />
     );
   }
 
   // Main Kanban board
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm p-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSelectedBoardId(null)}
-              className="text-gray-600 hover:text-gray-900 px-3 py-1 rounded hover:bg-gray-100"
-            >
-              ← Back
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold">{currentBoard?.title || 'Loading...'}</h1>
-              <p className="text-sm text-gray-600">
-                {columns.length} columns • {columns.reduce((sum, col) => sum + getCardsForColumn(col.id).length, 0)} cards
-              </p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex flex-col">
+      <Header
+        user={user}
+        currentBoard={currentBoard}
+        columns={columns}
+        getCardsForColumn={getCardsForColumn}
+        onBack={() => setSelectedBoardId(null)}
+        onAddColumn={() => {
+          const title = prompt('Enter column title:');
+          if (title?.trim()) addColumn(title.trim());
+        }}
+        onLogout={handleLogout}
+      />
 
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleAddColumn}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              + Add Column
-            </button>
-            <div className="flex items-center gap-2">
-              <img
-                src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}`}
-                alt="Profile"
-                className="w-8 h-8 rounded-full"
-              />
-              <span className="text-sm">{user.email?.split('@')[0]}</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      {error && <ErrorDisplay error={error} onRetry={refetch} />}
 
-      {/* Error display */}
-      {error && (
-        <div className="max-w-7xl mx-auto mt-4 px-4">
-          <div className="p-4 bg-red-100 text-red-700 rounded-lg">
-            Error: {error}
-            <button
-              onClick={() => refetch()}
-              className="ml-4 underline"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Kanban Board with Drag & Drop */}
       <DndContext onDragEnd={handleDragEnd} sensors={[sensor]}>
-        <div className="p-6">
+        <main className="flex-1 p-4 md:p-6">
           {kanbanLoading ? (
             <div className="flex justify-center items-center h-64">
-              <div className="text-lg">Loading board...</div>
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading board content...</p>
+              </div>
             </div>
           ) : columns.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No columns yet. Add your first column!</p>
+            <div className="max-w-4xl mx-auto text-center py-16">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white shadow-sm flex items-center justify-center">
+                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">No columns yet</h3>
+              <p className="text-gray-500 mb-8 max-w-md mx-auto">
+                Columns help you organize your workflow. Add your first column to get started.
+              </p>
               <button
-                onClick={handleAddColumn}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                onClick={() => {
+                  const title = prompt('Enter column title:');
+                  if (title?.trim()) addColumn(title.trim());
+                }}
+                className="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition shadow-md"
               >
-                Create First Column
+                Add First Column
               </button>
             </div>
           ) : (
-            <div className="flex gap-6 overflow-x-auto pb-4">
+            <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4">
               {columns.map(column => {
                 const columnCards = getCardsForColumn(column.id);
-
                 return (
                   <Column
                     key={column.id}
                     column={{
                       id: column.id,
                       title: column.title,
-                      cards: columnCards
+                      cards: columnCards,
+                      color: column.color
                     }}
                     addCard={handleAddCard}
-                    onUpdateCard={handleUpdateCard}
-                    onDeleteCard={handleDeleteCard}
+                    onUpdateCard={updateCard}
+                    onDeleteCard={deleteCard}
+                    removeColumn={removeColumn}
+                    updateColumn={updateColumn}
                   />
                 );
               })}
 
               {/* Add Column Button */}
-              <div className="flex-shrink-0">
+              <div >
                 <button
-                  onClick={handleAddColumn}
-                  className="w-80 h-full min-h-[600px] bg-white/50 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500"
+                  onClick={() => {
+                    const title = prompt('Enter column title:');
+                    if (title?.trim()) addColumn(title.trim());
+                  }}
+                  className="w-80 h-full  bg-white/70 backdrop-blur-sm border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-2xl flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 transition-all group"
                 >
-                  <div className="text-4xl mb-4">+</div>
-                  <h3 className="font-semibold">Add Column</h3>
+                  <div className="w-12 h-12 rounded-full bg-gray-100 group-hover:bg-blue-50 flex items-center justify-center mb-4 transition">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-lg">Add Column</h3>
+                  <p className="text-sm mt-2">Click to add a new column</p>
                 </button>
               </div>
             </div>
           )}
-        </div>
+        </main>
       </DndContext>
 
-      {/* Footer */}
-      <footer className="bg-white border-t p-4 mt-8">
-        <div className="max-w-7xl mx-auto text-sm text-gray-600">
-          <div className="flex justify-between">
-            <span>Board ID: {selectedBoardId?.substring(0, 8)}...</span>
-            <span>Drag & drop enabled</span>
-          </div>
-        </div>
-      </footer>
+      <Footer boardId={selectedBoardId} />
     </div>
   );
 }
