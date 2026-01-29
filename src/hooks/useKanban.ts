@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import type { CardType, ColumnType } from '../../types';
 
 export const useSupabaseKanban = (boardId: string | null) => {
     const [board, setBoard] = useState<any>(null);
-    const [columns, setColumns] = useState<any[]>([]);
+    const [columns, setColumns] = useState<ColumnType[]>([]);
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -29,28 +30,45 @@ export const useSupabaseKanban = (boardId: string | null) => {
             if (boardError) throw boardError;
             setBoard(boardData);
 
-            // Fetch columns
+            // Fetch columns with cards
             const { data: columnsData, error: columnsError } = await supabase
                 .from('columns')
-                .select('*')
+                .select(`
+                    *,
+                    cards (*)
+                `)
                 .eq('board_id', boardId)
                 .order('position');
 
             if (columnsError) throw columnsError;
-            setColumns(columnsData || []);
 
-            // Fetch cards for all columns
-            if (columnsData && columnsData.length > 0) {
-                const columnIds = columnsData.map(col => col.id);
-                const { data: cardsData, error: cardsError } = await supabase
-                    .from('cards')
-                    .select('*')
-                    .in('column_id', columnIds)
-                    .order('position');
+            // Map to proper types with null handling
+            const typedColumns: ColumnType[] = (columnsData || []).map(column => ({
+                id: column.id,
+                title: column.title,
+                color: column.color ?? '#e5e7eb',
+                position: column.position ?? 0,
+                board_id: column.board_id ?? undefined,
+                created_at: column.created_at ?? undefined,
+                updated_at: column.updated_at ?? undefined,
+                cards: ((column.cards as any[]) || [])
+                    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+                    .map((card): CardType => ({  // ✅ Type assertion
+                        id: card.id,
+                        title: card.title,
+                        description: card.description ?? undefined,
+                        progress: card.progress ?? undefined,  // ✅ Handles null
+                        tags: Array.isArray(card.tags) ? card.tags : [],  // ✅ Ensure array
+                        avatars: Array.isArray(card.avatars) ? card.avatars : [],  // ✅ Ensure array
+                        due_date: card.due_date ?? undefined,
+                        position: card.position ?? undefined,
+                        column_id: card.column_id ?? undefined,
+                        created_at: card.created_at ?? undefined,
+                        updated_at: card.updated_at ?? undefined
+                    }))
+            }));
 
-                if (cardsError) throw cardsError;
-                setCards(cardsData || []);
-            }
+            setColumns(typedColumns);
 
         } catch (err) {
             console.error('Error fetching data:', err);
@@ -267,11 +285,11 @@ export const useSupabaseKanban = (boardId: string | null) => {
     }, [cards]);
 
     // Add column - simple version
-    const addColumn = async (title: string) => {
+    const addColumn = async (title: string): Promise<void> => {
         if (!boardId) throw new Error('No board selected');
 
         try {
-            const maxPosition = Math.max(...columns.map(c => c.position), 0);
+            const maxPosition = Math.max(...columns.map(c => c.position ?? 0), 0);
 
             const { data, error } = await supabase
                 .from('columns')
@@ -286,16 +304,101 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
             if (error) throw error;
 
-            // Update local state
-            setColumns(prev => [...prev, data]);
-            return data;
+            // Properly type the new column
+            const newColumn: ColumnType = {
+                id: data.id,
+                title: data.title,
+                cards: [],
+                color: data.color ?? '#e5e7eb',
+                position: data.position,
+                board_id: data.board_id ?? undefined,
+                created_at: data.created_at ?? undefined,
+                updated_at: data.updated_at ?? undefined
+            };
+
+            setColumns(prev => [...prev, newColumn]);
 
         } catch (err) {
             console.error('Error adding column:', err);
             throw err;
         }
     };
+    const updateColumn = async (
+        columnId: string,
+        updates: { title?: string; color?: string; position?: number }
+    ): Promise<void> => {
+        if (!boardId) throw new Error('No board selected');
 
+        try {
+            const { data, error } = await supabase
+                .from('columns')
+                .update(updates)
+                .eq('id', columnId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            setColumns(prev =>
+                prev.map(col => {
+                    if (col.id === columnId) {
+                        return {
+                            ...col,
+                            ...updates,
+                            updated_at: data.updated_at ?? col.updated_at
+                        };
+                    }
+                    return col;
+                })
+            );
+        } catch (err) {
+            console.error('Error updating column:', err);
+            throw err;
+        }
+    };
+    const removeColumn = async (columnId: string) => {
+        if (!boardId) throw new Error('No board selected');
+
+        // User confirmation
+        const confirmed = window.confirm('Are you sure you want to delete this column? All cards will be deleted.');
+        if (!confirmed) return;
+
+        try {
+            // Delete cards first
+            const { error: cardsError } = await supabase
+                .from('cards')
+                .delete()
+                .eq('column_id', columnId);
+
+            if (cardsError) throw cardsError;
+
+            // Delete column
+            const { error: columnError } = await supabase
+                .from('columns')
+                .delete()
+                .eq('id', columnId);
+
+            if (columnError) throw columnError;
+
+            // Update local state immediately
+            setColumns(prev => {
+                const filtered = prev.filter(col => col.id !== columnId);
+                // Positions ko fix karo
+                return filtered.map((col, index) => ({
+                    ...col,
+                    position: index
+                }));
+            });
+
+            // Show success message (optional)
+            console.log('Column deleted successfully');
+
+        } catch (err) {
+            console.error('Error removing column:', err);
+            alert('Failed to delete column');
+            throw err;
+        }
+    };
     // Add card - simple version
     const addCard = async (columnId: string, title: string) => {
         try {
@@ -393,6 +496,8 @@ export const useSupabaseKanban = (boardId: string | null) => {
         deleteCard,
         updateCard,
         getCardsForColumn,
-        refetch: fetchData
+        refetch: fetchData,
+        removeColumn,
+        updateColumn
     };
 };
