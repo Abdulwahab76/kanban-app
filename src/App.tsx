@@ -35,6 +35,7 @@ export default function App(): JSX.Element {
   const sensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 8 },
   });
+  console.log(columns, 'columns');
 
   // Fetch user's boards
   useEffect(() => {

@@ -5,8 +5,8 @@ export interface CardType {
     title: string;
     description?: string;
     progress?: number;  // ✅ Now optional
-    tags: string[];
-    avatars: string[];
+    tags?: string[];
+    avatars?: string[];
     due_date?: string;
     created_at?: string;
     updated_at?: string;

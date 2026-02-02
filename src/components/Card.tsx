@@ -18,6 +18,7 @@ export default function Card({ card, onUpdate, onDelete }: CardProps) {
     const [editProgress, setEditProgress] = useState(card.progress || 0);
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    console.log(card, 'card');
 
     const {
         attributes,
