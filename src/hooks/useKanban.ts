@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import type { CardType, ColumnType } from '../../types';
 
 export const useSupabaseKanban = (boardId: string | null) => {
-    const [board, setBoard] = useState<any>(null);
     const [columns, setColumns] = useState<ColumnType[]>([]);
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -675,7 +674,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
     };
 
     return {
-        board,
         columns,
         cards,
         loading,

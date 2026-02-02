@@ -190,7 +190,7 @@ export default function Column({
             </div>
 
             {/* Cards Container */}
-            <div className={`flex-1 bg-gray-50/50 py-4 rounded-b-2xl flex flex-col gap-3  max-h-[calc(100vh-200px)] overflow-y-auto ${isOver ? 'bg-blue-50/50' : ''}`}>
+            <div className={`flex-1 w-full bg-gray-50/50 py-4 rounded-b-2xl flex flex-col gap-3  max-h-[calc(100vh-200px)] overflow-y-auto ${isOver ? 'bg-blue-50/50' : ''}`}>
                 {column.cards.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-8">
                         <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
