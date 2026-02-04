@@ -72,14 +72,14 @@ export const Header = ({
                                 className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition"
                             >
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
+                                    <div className="w-8 h-8 rounded-full bg-linear-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
                                         {user.email?.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="hidden md:block text-left">
                                         <p className="text-sm font-medium text-gray-900">
                                             {user.email?.split('@')[0]}
                                         </p>
-                                        <p className="text-xs text-gray-500 truncate max-w-[150px]">
+                                        <p className="text-xs text-gray-500 truncate max-w-37.5">
                                             {user.email}
                                         </p>
                                     </div>

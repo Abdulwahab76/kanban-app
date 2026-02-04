@@ -1,116 +1,81 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useState, type JSX } from 'react'
+import { supabase } from '../lib/supabase'
+import { useNavigate } from '@tanstack/react-router'
 
-export default function AuthComponent() {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [user, setUser] = useState<any>(null);
-
-    // 🔁 Listen auth state (important for Google redirect)
-    useEffect(() => {
-        supabase.auth.getUser().then(({ data }) => {
-            setUser(data.user);
-        });
-
-        const { data: listener } = supabase.auth.onAuthStateChange(
-            (_event, session) => {
-                setUser(session?.user ?? null);
-            }
-        );
-
-        return () => {
-            listener.subscription.unsubscribe();
-        };
-    }, []);
+export default function AuthComponent(): JSX.Element {
+    const [email, setEmail] = useState<string>('')
+    const [password, setPassword] = useState<string>('')
+    const [loading, setLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string>('')
+    const navigate = useNavigate()
 
     // 📧 Email login
     const handleManualLogin = async () => {
         try {
-            setLoading(true);
-            setError('');
+            setLoading(true)
+            setError('')
 
             const { error } = await supabase.auth.signInWithPassword({
                 email: email.trim(),
-                password: password.trim()
-            });
+                password: password.trim(),
+            })
 
-            if (error) throw error;
-        } catch (err: any) {
-            setError(err.message);
+            if (error) throw error
+            // ✅ success → router will redirect automatically
+            navigate({ to: '/boards' })
+
+        } catch (err) {
+            setError((err as Error).message)
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
 
     // 🆕 Sign up
     const handleSignUp = async () => {
         try {
-            setLoading(true);
-            setError('');
+            setLoading(true)
+            setError('')
 
             const { error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password: password.trim(),
                 options: {
-                    emailRedirectTo: window.location.origin
-                }
-            });
+                    emailRedirectTo: window.location.origin,
+                },
+            })
 
-            if (error) throw error;
+            if (error) throw error
+            navigate({ to: '/boards' })
 
-            alert('Check your email for confirmation');
-        } catch (err: any) {
-            setError(err.message);
+            alert('Check your email for confirmation')
+        } catch (err) {
+            setError((err as Error).message)
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
 
     // 🔵 Google login
     const handleGoogleLogin = async () => {
         try {
-            setLoading(true);
-            setError('');
+            setLoading(true)
+            setError('')
 
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin
-                }
+                    redirectTo: window.location.origin,
+                },
+            })
 
-            });
+            if (error) throw error
+            navigate({ to: '/boards' })
 
-            if (error) throw error;
-        } catch (err: any) {
-            setError(err.message);
-            setLoading(false);
+        } catch (err) {
+            setError((err as Error).message)
+            setLoading(false)
         }
-    };
-
-    // 🚪 Logout
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        setUser(null);
-    };
-
-    // ✅ Already logged in
-    if (user) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div className="bg-white p-6 rounded-xl shadow w-full max-w-md text-center space-y-4">
-                    <h2 className="text-xl font-bold">Welcome 👋</h2>
-                    <p className="text-gray-600">{user.email}</p>
-                    <button
-                        onClick={handleLogout}
-                        className="w-full bg-red-500 text-white p-3 rounded-lg hover:bg-red-600"
-                    >
-                        Logout
-                    </button>
-                </div>
-            </div>
-        );
     }
 
     return (
@@ -127,8 +92,6 @@ export default function AuthComponent() {
                 )}
 
                 <div className="space-y-4">
-
-                    {/* Google */}
                     <button
                         onClick={handleGoogleLogin}
                         disabled={loading}
@@ -147,21 +110,19 @@ export default function AuthComponent() {
                         <div className="flex-1 h-px bg-gray-300" />
                     </div>
 
-                    {/* Email */}
                     <input
                         type="email"
                         placeholder="Email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={e => setEmail(e.target.value)}
                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
 
-                    {/* Password */}
                     <input
                         type="password"
                         placeholder="Password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={e => setPassword(e.target.value)}
                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
 
@@ -185,5 +146,5 @@ export default function AuthComponent() {
                 </div>
             </div>
         </div>
-    );
+    )
 }

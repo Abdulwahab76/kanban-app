@@ -7,7 +7,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    console.log(cards, 'card===');
 
     // Fetch data once on mount and when boardId changes
     const fetchData = useCallback(async () => {
@@ -80,7 +79,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
     useEffect(() => {
         fetchData();
 
-        // No real-time subscriptions for now to prevent loops
     }, [fetchData]);
 
     // ✅ ADDED: Move card function
@@ -625,6 +623,7 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
     // Delete card
     const deleteCard = async (cardId: string) => {
+        
         try {
             const { error } = await supabase
                 .from('cards')
@@ -633,7 +632,7 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
             if (error) throw error;
 
-            // Update local state
+            // Update local sta te
             setCards(prev => prev.filter(card => card.id !== cardId));
 
         } catch (err) {

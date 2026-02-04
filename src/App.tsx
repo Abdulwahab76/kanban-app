@@ -34,7 +34,6 @@ export default function App(): JSX.Element {
   const sensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 8 },
   });
-  console.log(columns, 'columns');
 
   // Fetch user's boards
   useEffect(() => {
@@ -205,7 +204,7 @@ export default function App(): JSX.Element {
               </button>
             </div>
           ) : (
-            <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4">
+            <div className="flex gap-4 md:gap-6 overflow-auto pb-4 ">
               {columns.map(column => {
                 const columnCards = getCardsForColumn(column.id);
                 return (
