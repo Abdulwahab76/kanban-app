@@ -160,7 +160,7 @@ export default function App(): JSX.Element {
     <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex flex-col">
       <Header
         user={user}
-        currentBoard={boards.find(b => b.id === selectedBoardId) || null}
+        board={boards.find(b => b.id === selectedBoardId) || null}
         columns={columns}
         getCardsForColumn={getCardsForColumn}
         onBack={() => setSelectedBoardId(null)}
