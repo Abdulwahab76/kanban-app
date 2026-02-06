@@ -4,6 +4,9 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { BoardSelectionScreen } from '../../components/BoardSelectionScreen';
+import type { Database } from "../../lib/database.types";
+type BoardRow =
+  Database['public']['Tables']['boards']['Row']
 
 export const Route = createFileRoute('/_authenticated/boards')({
   component: BoardsComponent,
@@ -12,7 +15,7 @@ export const Route = createFileRoute('/_authenticated/boards')({
 function BoardsComponent() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [boards, setBoards] = useState<any[]>([]);
+  const [boards, setBoards] = useState<BoardRow[]>([]);
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,14 +56,19 @@ function BoardsComponent() {
     if (!title?.trim()) return;
 
     try {
-      await supabase.from('profiles').upsert(
-        {
-          id: user.id,
-          email: user.email,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
+      if (user.id && user.email) {
+        await supabase.from('profiles').upsert(
+          {
+            id: user.id,
+            email: user.email,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
+      } else {
+        console.error('User ID or email is undefined');
+        throw new Error('User ID or email is required to upsert profile');
+      }
 
       const { data, error } = await supabase
         .from('boards')

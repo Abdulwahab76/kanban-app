@@ -3,16 +3,16 @@ import { useState } from "react";
 
 export const Header = ({
     user,
-    currentBoard,
     columns,
+    board,
     getCardsForColumn,
     onBack,
     onAddColumn,
     onLogout
 }: {
     user: any;
-    currentBoard: any;
     columns: any[];
+    board: any;
     getCardsForColumn: (id: string) => any[];
     onBack: () => void;
     onAddColumn: () => void;
@@ -43,7 +43,7 @@ export const Header = ({
 
                         <div className="flex-1 md:flex-none">
                             <h1 className="text-xl font-bold text-gray-900 truncate">
-                                {currentBoard?.title || 'Loading...'}
+                                {board?.title}
                             </h1>
                             <div className="flex items-center gap-3 text-sm text-gray-600">
                                 <span>{columns.length} columns</span>

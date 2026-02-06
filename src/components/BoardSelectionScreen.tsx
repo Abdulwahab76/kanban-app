@@ -9,7 +9,7 @@ export const BoardSelectionScreen = ({
     onSelectBoard: (id: string) => void;
     user: any;
 }) => (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
         <div className="max-w-7xl mx-auto px-4 py-8">
             {/* Header */}
             <div className="mb-10">
@@ -20,7 +20,7 @@ export const BoardSelectionScreen = ({
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
+                            <div className="w-8 h-8 rounded-full bg-linear-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
                                 {user.email?.charAt(0).toUpperCase()}
                             </div>
                             <span className="text-sm font-medium">{user.email?.split('@')[0]}</span>

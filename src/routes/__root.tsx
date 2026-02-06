@@ -1,5 +1,4 @@
-// src/routes/__root.tsx
-import { createRootRoute, Navigate, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 
 export const Route = createRootRoute({

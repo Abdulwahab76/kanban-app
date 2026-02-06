@@ -23,16 +23,15 @@ export interface ColumnType {
     created_at?: string;
     updated_at?: string;
 }
-
 export interface BoardType {
-    id: string;
-    title: string;
-    description?: string;
-    owner_id: string;
-    background_color?: string;
-    is_public: boolean;
-    created_at: string;
-    updated_at: string;
+    id: string
+    title: string
+    description: string | null
+    owner_id: string | null
+    background_color: string | null
+    is_public: boolean | null
+    created_at: string | null
+    updated_at: string | null
 }
 
 export interface ProfileType {

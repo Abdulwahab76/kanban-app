@@ -1,4 +1,3 @@
-// src/routes/_authenticated/board.$boardId.tsx
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { DndContext, type DragEndEvent, PointerSensor, useSensor } from '@dnd-kit/core'
 import Column from '../../components/Column'
@@ -8,7 +7,10 @@ import { Header } from '../../components/layout/Header'
 import { Footer } from '../../components/layout/Footer'
 import { ErrorDisplay, LoadingScreen } from '../../components/ScreenStatus'
 import { supabase } from '../../lib/supabase'
-
+import { useEffect, useState } from 'react'
+import type { Database } from "../../lib/database.types";
+type BoardRow =
+  Database['public']['Tables']['boards']['Row']
 export const Route = createFileRoute('/_authenticated/board/$boardId')({
   component: BoardComponent,
 })
@@ -19,7 +21,6 @@ function BoardComponent() {
   const { user } = useAuth()
 
   const {
-    board,
     columns,
     loading,
     error,
@@ -33,6 +34,26 @@ function BoardComponent() {
     removeColumn,
     updateColumn
   } = useSupabaseKanban(boardId)
+  const [currentBoard, setCurrentBoard] = useState<BoardRow>()
+
+  useEffect(() => {
+    const fetchBoard = async () => {
+      const { data, error } = await supabase
+        .from('boards')
+        .select('*')
+        .eq('id', boardId)
+        .single()
+
+      if (error) {
+        console.error('Error fetching board:', error)
+        return
+      }
+
+      setCurrentBoard(data)
+    }
+
+    fetchBoard()
+  }, [boardId])
 
   const sensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 8 },
@@ -41,6 +62,7 @@ function BoardComponent() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over) return
+    console.log(columns, 'columns---=');
 
     const activeCardId = active.id as string
     const overColumnId = over.id as string
@@ -76,8 +98,8 @@ function BoardComponent() {
     <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex flex-col">
       <Header
         user={user!}
-        currentBoard={board}
         columns={columns}
+        board={currentBoard}
         getCardsForColumn={getCardsForColumn}
         onBack={() => navigate({ to: '/boards' })}
         onAddColumn={() => {
