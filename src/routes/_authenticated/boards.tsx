@@ -12,7 +12,7 @@ export const Route = createFileRoute('/_authenticated/boards')({
   component: BoardsComponent,
 });
 
-function BoardsComponent() {
+export function BoardsComponent() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [boards, setBoards] = useState<BoardRow[]>([]);

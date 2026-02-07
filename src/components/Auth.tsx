@@ -22,7 +22,6 @@ export default function AuthComponent(): JSX.Element {
 
             if (error) throw error
             // ✅ success → router will redirect automatically
-            navigate({ to: '/boards' })
 
         } catch (err) {
             setError((err as Error).message)
@@ -46,7 +45,6 @@ export default function AuthComponent(): JSX.Element {
             })
 
             if (error) throw error
-            navigate({ to: '/boards' })
 
             alert('Check your email for confirmation')
         } catch (err) {
@@ -70,7 +68,6 @@ export default function AuthComponent(): JSX.Element {
             })
 
             if (error) throw error
-            navigate({ to: '/boards' })
 
         } catch (err) {
             setError((err as Error).message)
