@@ -11,10 +11,7 @@ type CardProps = {
   onUpdate: (cardId: string, updates: any) => Promise<void>;
   onDelete: (cardId: string) => Promise<void>;
   onCardUpdate?: (updatedCard: CardType) => void;
-  onAddComment: any;
-  onUpdateComment: any;
-  onDeleteComment: any;
-  onUpdateCardComments: any;
+  onUpdateCardComments: (cardId: string, comment: CommentType) => void;
 };
 
 export default function Card({
@@ -22,9 +19,6 @@ export default function Card({
   onUpdate,
   onDelete,
   onCardUpdate,
-  onAddComment,
-  onUpdateComment,
-  onDeleteComment,
   onUpdateCardComments,
 }: CardProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -330,10 +324,9 @@ export default function Card({
           onUpdateCard={onUpdate}
           onDeleteCard={onDelete}
           onCardUpdate={onCardUpdate}
-          onAddComment={onAddComment}
-          onUpdateComment={onUpdateComment}
-          onDeleteComment={onDeleteComment}
-          onUpdateCardComments={onUpdateCardComments}
+          onUpdateCardComments={(cardId, comment) =>
+            onUpdateCardComments(cardId, comment)
+          }
         />
       )}
     </>

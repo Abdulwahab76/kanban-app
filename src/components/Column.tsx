@@ -4,7 +4,6 @@ import { useState, type JSX } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Plus, MoreVertical, X } from "lucide-react";
 import type { CardType, ColumnType } from "../../types";
-import { useComments } from "../hooks/useComments";
 import { useKanban } from "../context/useKanbanContext";
 
 type ColumnProps = {
@@ -37,7 +36,6 @@ export default function Column({
     id: column.id,
   });
   const { updateCardComments } = useKanban();
-  const { addComment, updateComment, deleteComment } = useComments();
   const handleAdd = async () => {
     if (newTitle.trim() === "") return;
 
@@ -250,9 +248,6 @@ export default function Column({
               onDelete={handleDeleteCard}
               onCardUpdate={onCardUpdate}
               // ✅ Pass comment functions from context
-              onAddComment={addComment}
-              onUpdateComment={updateComment}
-              onDeleteComment={deleteComment}
               onUpdateCardComments={updateCardComments}
             />
           ))

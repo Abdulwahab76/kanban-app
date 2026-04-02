@@ -1,8 +1,9 @@
 // contexts/CommentContext.tsx
-import { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { CommentType } from "../../types";
 
+// Define Context Type
 interface CommentContextType {
   addComment: (cardId: string, content: string) => Promise<CommentType | null>;
   updateComment: (
@@ -13,8 +14,19 @@ interface CommentContextType {
   commentLoading: boolean;
 }
 
+// Create Context
 const CommentContext = createContext<CommentContextType | undefined>(undefined);
 
+// ✅ Custom Hook (This is what you import!)
+export const useComments = () => {
+  const context = useContext(CommentContext);
+  if (!context) {
+    throw new Error("useComments must be used within CommentProvider");
+  }
+  return context;
+};
+
+// Provider Component
 export const CommentProvider = ({
   children,
 }: {
@@ -22,7 +34,11 @@ export const CommentProvider = ({
 }) => {
   const [commentLoading, setCommentLoading] = useState(false);
 
-  const addComment = async (cardId: string, content: string) => {
+  // Add Comment
+  const addComment = async (
+    cardId: string,
+    content: string
+  ): Promise<CommentType | null> => {
     console.log("=== ADD COMMENT ===");
     setCommentLoading(true);
 
@@ -89,8 +105,11 @@ export const CommentProvider = ({
     }
   };
 
-  const updateComment = async (commentId: string, content: string) => {
-    setCommentLoading(true);
+  // Update Comment
+  const updateComment = async (
+    commentId: string,
+    content: string
+  ): Promise<CommentType | null> => {
     try {
       const { data, error } = await supabase
         .from("comments")
@@ -103,29 +122,43 @@ export const CommentProvider = ({
         .single();
 
       if (error) throw error;
-      return data as CommentType;
+
+      // Get profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username, email, avatar_url")
+        .eq("id", data.user_id)
+        .single();
+
+      return {
+        ...data,
+        profiles: profile
+          ? {
+              username: profile.username,
+              email: profile.email,
+              avatar_url: profile.avatar_url || undefined,
+            }
+          : undefined,
+      } as CommentType;
     } catch (err) {
-      console.error(err);
+      console.error("Error updating comment:", err);
       return null;
-    } finally {
-      setCommentLoading(false);
     }
   };
 
-  const deleteComment = async (commentId: string) => {
-    setCommentLoading(true);
+  // Delete Comment
+  const deleteComment = async (commentId: string): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from("comments")
         .delete()
         .eq("id", commentId);
+
       if (error) throw error;
       return true;
     } catch (err) {
-      console.error(err);
+      console.error("Error deleting comment:", err);
       return false;
-    } finally {
-      setCommentLoading(false);
     }
   };
 
@@ -136,11 +169,4 @@ export const CommentProvider = ({
       {children}
     </CommentContext.Provider>
   );
-};
-
-export const useComments = () => {
-  const context = useContext(CommentContext);
-  if (!context)
-    throw new Error("useComments must be used within CommentProvider");
-  return context;
 };

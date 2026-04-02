@@ -3,8 +3,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Edit2, Send, Trash2, User, Calendar } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { supabase } from "../lib/supabase";
-import { useComments } from "../hooks/useComments";
 import type { CardType, CommentType } from "../../types";
+import { useComments } from "../context/commentContext";
 
 interface CardModalProps {
   setShowModal: React.Dispatch<React.SetStateAction<boolean>>;
@@ -13,10 +13,7 @@ interface CardModalProps {
   onUpdateCard: (cardId: string, updates: any) => Promise<void>;
   onDeleteCard: (cardId: string) => Promise<void>;
   onCardUpdate?: (updatedCard: CardType) => void; // ✅ Optional callback to update parent
-  onAddComment: any;
-  onUpdateComment: any;
-  onDeleteComment: any;
-  onUpdateCardComments: any;
+  onUpdateCardComments: (cardId: string, comment: CommentType) => void; // ✅ New callback for comment updates
 }
 
 export default function CardModal({
@@ -26,9 +23,6 @@ export default function CardModal({
   onUpdateCard,
   onDeleteCard,
   onCardUpdate,
-  onAddComment,
-  onUpdateComment,
-  onDeleteComment,
   onUpdateCardComments,
 }: CardModalProps) {
   // Local state for card data
@@ -47,7 +41,6 @@ export default function CardModal({
   const [loading, setLoading] = useState(false);
 
   const { addComment, updateComment, deleteComment } = useComments();
-  console.log(comments, "comm");
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
@@ -65,24 +58,6 @@ export default function CardModal({
       titleInputRef.current.focus();
     }
   }, [isEditingTitle]);
-
-  // ✅ Notify parent when comments change (to update card in parent state)
-  const updateParentCard = useCallback(() => {
-    if (onCardUpdate) {
-      const updatedCard = {
-        ...card,
-        comments: comments,
-      };
-      onCardUpdate(updatedCard);
-    }
-  }, [card, comments, onCardUpdate]);
-
-  // Call parent update whenever comments change
-  // useEffect(() => {
-  //   if (comments !== card.comments) {
-  //     updateParentCard();
-  //   }
-  // }, [comments, card.comments, updateParentCard]);
 
   const handleClose = () => {
     setShowModal(false);
@@ -192,7 +167,25 @@ export default function CardModal({
       const success = await deleteComment(commentId);
 
       if (success) {
-        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        // 1. Update local state (modal mein se hatane ke liye)
+        const updatedComments = comments.filter((c) => c.id !== commentId);
+        setComments(updatedComments);
+
+        // 2. ✅ CRITICAL: Update parent state (taaki modal close/open mein wapas na aaye)
+        const updatedCard = {
+          ...card,
+          comments: updatedComments,
+        };
+
+        // Update parent through callback
+        if (onCardUpdate) {
+          onCardUpdate(updatedCard);
+        }
+
+        // Also update database through onUpdateCard
+        await onUpdateCard(card.id, { comments: updatedComments });
+
+        console.log("✅ Comment deleted from both local and parent state");
       }
     } catch (error) {
       console.error("❌ Error deleting comment:", error);
