@@ -1,12 +1,27 @@
-// hooks/useComments.ts - SIMPLEST WORKING VERSION
-import { useState } from "react";
+// contexts/CommentContext.tsx
+import { createContext, useContext, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import type { CommentType } from "../../types";
 
-export const useComments = () => {
+interface CommentContextType {
+  addComment: (cardId: string, content: string) => Promise<CommentType | null>;
+  updateComment: (
+    commentId: string,
+    content: string
+  ) => Promise<CommentType | null>;
+  deleteComment: (commentId: string) => Promise<boolean>;
+  commentLoading: boolean;
+}
+
+const CommentContext = createContext<CommentContextType | undefined>(undefined);
+
+export const CommentProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [commentLoading, setCommentLoading] = useState(false);
 
-  // hooks/useComments.ts
   const addComment = async (cardId: string, content: string) => {
     console.log("=== ADD COMMENT ===");
     setCommentLoading(true);
@@ -75,6 +90,7 @@ export const useComments = () => {
   };
 
   const updateComment = async (commentId: string, content: string) => {
+    setCommentLoading(true);
     try {
       const { data, error } = await supabase
         .from("comments")
@@ -87,49 +103,44 @@ export const useComments = () => {
         .single();
 
       if (error) throw error;
-
-      // Get profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, email, avatar_url")
-        .eq("id", data.user_id)
-        .single();
-
-      return {
-        ...data,
-        profiles: profile
-          ? {
-              username: profile.username,
-              email: profile.email,
-              avatar_url: profile.avatar_url || undefined,
-            }
-          : undefined,
-      } as CommentType;
+      return data as CommentType;
     } catch (err) {
-      console.error("Error updating comment:", err);
-      throw err;
+      console.error(err);
+      return null;
+    } finally {
+      setCommentLoading(false);
     }
   };
 
   const deleteComment = async (commentId: string) => {
+    setCommentLoading(true);
     try {
       const { error } = await supabase
         .from("comments")
         .delete()
         .eq("id", commentId);
-
       if (error) throw error;
       return true;
     } catch (err) {
-      console.error("Error deleting comment:", err);
-      throw err;
+      console.error(err);
+      return false;
+    } finally {
+      setCommentLoading(false);
     }
   };
 
-  return {
-    addComment,
-    updateComment,
-    deleteComment,
-    commentLoading,
-  };
+  return (
+    <CommentContext.Provider
+      value={{ addComment, updateComment, deleteComment, commentLoading }}
+    >
+      {children}
+    </CommentContext.Provider>
+  );
+};
+
+export const useComments = () => {
+  const context = useContext(CommentContext);
+  if (!context)
+    throw new Error("useComments must be used within CommentProvider");
+  return context;
 };

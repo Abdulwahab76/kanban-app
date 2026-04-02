@@ -10,9 +10,23 @@ type CardProps = {
   columnId: string;
   onUpdate: (cardId: string, updates: any) => Promise<void>;
   onDelete: (cardId: string) => Promise<void>;
+  onCardUpdate?: (updatedCard: CardType) => void;
+  onAddComment: any;
+  onUpdateComment: any;
+  onDeleteComment: any;
+  onUpdateCardComments: any;
 };
 
-export default function Card({ card, onUpdate, onDelete }: CardProps) {
+export default function Card({
+  card,
+  onUpdate,
+  onDelete,
+  onCardUpdate,
+  onAddComment,
+  onUpdateComment,
+  onDeleteComment,
+  onUpdateCardComments,
+}: CardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(card.title);
   const [editDescription, setEditDescription] = useState(
@@ -21,6 +35,7 @@ export default function Card({ card, onUpdate, onDelete }: CardProps) {
   const [editProgress, setEditProgress] = useState(card.progress || 0);
   const [isSaving, setIsSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  console.log(card, "card");
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
@@ -314,6 +329,11 @@ export default function Card({ card, onUpdate, onDelete }: CardProps) {
           card={card}
           onUpdateCard={onUpdate}
           onDeleteCard={onDelete}
+          onCardUpdate={onCardUpdate}
+          onAddComment={onAddComment}
+          onUpdateComment={onUpdateComment}
+          onDeleteComment={onDeleteComment}
+          onUpdateCardComments={onUpdateCardComments}
         />
       )}
     </>

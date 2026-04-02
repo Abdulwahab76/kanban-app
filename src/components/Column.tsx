@@ -3,7 +3,9 @@ import Card from "./Card";
 import { useState, type JSX } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Plus, MoreVertical, X } from "lucide-react";
-import type { ColumnType } from "../../types";
+import type { CardType, ColumnType } from "../../types";
+import { useComments } from "../hooks/useComments";
+import { useKanban } from "../context/useKanbanContext";
 
 type ColumnProps = {
   column: ColumnType;
@@ -15,6 +17,7 @@ type ColumnProps = {
     columnId: string,
     updates: Partial<ColumnType>
   ) => Promise<void>;
+  onCardUpdate?: (updatedCard: CardType) => void;
 };
 
 export default function Column({
@@ -24,6 +27,7 @@ export default function Column({
   onDeleteCard,
   removeColumn,
   updateColumn,
+  onCardUpdate,
 }: ColumnProps): JSX.Element {
   const [newTitle, setNewTitle] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -32,7 +36,8 @@ export default function Column({
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
-
+  const { updateCardComments } = useKanban();
+  const { addComment, updateComment, deleteComment } = useComments();
   const handleAdd = async () => {
     if (newTitle.trim() === "") return;
 
@@ -243,6 +248,12 @@ export default function Column({
               columnId={column.id}
               onUpdate={handleUpdateCard}
               onDelete={handleDeleteCard}
+              onCardUpdate={onCardUpdate}
+              // ✅ Pass comment functions from context
+              onAddComment={addComment}
+              onUpdateComment={updateComment}
+              onDeleteComment={deleteComment}
+              onUpdateCardComments={updateCardComments}
             />
           ))
         )}

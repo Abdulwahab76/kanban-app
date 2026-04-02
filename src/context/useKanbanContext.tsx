@@ -1,22 +1,94 @@
-import { useState, useEffect, useCallback } from "react";
+// contexts/KanbanContext.tsx
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { supabase } from "../lib/supabase";
-import type {
-  CardType,
-  CardWithComments,
-  ColumnType,
-  CommentType,
-} from "../../types";
+import type { CardType, ColumnType, CommentType } from "../../types";
 
-export const useSupabaseKanban = (boardId: string | null) => {
+// Define Context Type
+interface KanbanContextType {
+  columns: ColumnType[];
+  loading: boolean;
+  error: string | null;
+  addColumn: (title: string) => Promise<void>;
+  addCard: (columnId: string, title: string) => Promise<void>;
+  updateCard: (cardId: string, updates: any) => Promise<void>;
+  deleteCard: (cardId: string) => Promise<void>;
+  moveCard: (
+    cardId: string,
+    targetColumnId: string,
+    newPosition?: number
+  ) => Promise<void>;
+  moveCardSimple: (
+    cardId: string,
+    targetColumnId: string,
+    newPosition?: number
+  ) => Promise<void>;
+  removeColumn: (columnId: string) => Promise<void>;
+  updateColumn: (
+    columnId: string,
+    updates: { title?: string; color?: string; position?: number }
+  ) => Promise<void>;
+  refetch: () => Promise<void>;
+  // ✅ Add comment update helper
+  updateCardComments: (cardId: string, newComment: CommentType) => void;
+  setColumns: React.Dispatch<React.SetStateAction<ColumnType[]>>;
+  getCardsForColumn: (columnId: string) => CardType[];
+}
+
+const KanbanContext = createContext<KanbanContextType | undefined>(undefined);
+
+export const useKanban = () => {
+  const context = useContext(KanbanContext);
+  if (!context) {
+    throw new Error("useKanban must be used within KanbanProvider");
+  }
+  return context;
+};
+
+// Provider Component
+export const KanbanProvider = ({
+  children,
+  boardId,
+}: {
+  children: React.ReactNode;
+  boardId: string | null;
+}) => {
   const [columns, setColumns] = useState<ColumnType[]>([]);
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data once on mount and when boardId changes
-  // Add this interface at the top of your file
+  // ✅ Helper: Update card comments (for real-time UI update)
+  const updateCardComments = useCallback(
+    (cardId: string, newComment: CommentType) => {
+      console.log("🔄 Updating card comments in context:", cardId);
 
-  // Then use it in fetchData
+      setColumns((prev) =>
+        prev.map((col) => ({
+          ...col,
+          cards: col.cards.map((card) =>
+            card.id === cardId
+              ? {
+                  ...card,
+                  comments: [newComment, ...(card.comments || [])],
+                }
+              : card
+          ),
+        }))
+      );
+    },
+    []
+  );
+  const getCardsForColumn = (columnId: string): CardType[] => {
+    const column = columns.find((col) => col.id === columnId);
+    return column?.cards || [];
+  };
+  // Fetch Data
   const fetchData = useCallback(async () => {
     if (!boardId) {
       setColumns([]);
@@ -28,25 +100,24 @@ export const useSupabaseKanban = (boardId: string | null) => {
       setLoading(true);
       setError(null);
 
-      // ✅ FIXED: Include profiles with comments
       const { data: columnsData, error: columnsError } = await supabase
         .from("columns")
         .select(
           `
-                *,
-                cards (
                     *,
-                    comments (
+                    cards (
                         *,
-                        profiles!comments_user_id_fkey (
-                            id,
-                            username,
-                            email,
-                            avatar_url
+                        comments (
+                            *,
+                            profiles!comments_user_id_fkey (
+                                id,
+                                username,
+                                email,
+                                avatar_url
+                            )
                         )
                     )
-                )
-            `
+                `
         )
         .eq("board_id", boardId)
         .order("position");
@@ -69,7 +140,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
               column_id: card.column_id ?? column.id,
               created_at: card.created_at ?? "",
               updated_at: card.updated_at ?? "",
-              // ✅ FIXED: Map comments with profiles
               comments: (card.comments || [])
                 .map((comment: any) => ({
                   id: comment.id,
@@ -116,64 +186,37 @@ export const useSupabaseKanban = (boardId: string | null) => {
     }
   }, [boardId]);
 
-  // Fetch data only on mount and when boardId changes
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // ✅ ADDED: Move card function
+  // Move Card Function
   const moveCard = useCallback(
     async (cardId: string, targetColumnId: string, newPosition?: number) => {
       try {
-        console.log("📦 Moving card:", cardId, "to column:", targetColumnId);
-
-        // Find the card to move
         const cardToMove = cards.find((c) => c.id === cardId);
-        if (!cardToMove) {
-          throw new Error("Card not found");
-        }
+        if (!cardToMove) throw new Error("Card not found");
 
         const sourceColumnId = cardToMove.column_id;
 
-        console.log(
-          "Source column:",
-          sourceColumnId,
-          "Target column:",
-          targetColumnId
-        );
-
-        // If moving within same column, just update position
         if (sourceColumnId === targetColumnId) {
-          console.log("Moving within same column");
-
-          // Get all cards in this column
           const columnCards = cards
             .filter((c) => c.column_id === targetColumnId && c.id !== cardId)
             .sort((a, b) => a.position - b.position);
 
-          // Calculate new position
           const position = newPosition || columnCards.length + 1;
-
-          // Update positions in database
           const updates = [];
 
-          // First, update the moved card
           updates.push(
             supabase
               .from("cards")
-              .update({
-                position: position,
-                updated_at: new Date().toISOString(),
-              })
+              .update({ position, updated_at: new Date().toISOString() })
               .eq("id", cardId)
           );
 
-          // Update other cards positions
           let currentPos = 1;
           for (const card of columnCards) {
-            if (currentPos === position) {
-              currentPos++; // Skip the position where we inserted the moved card
-            }
+            if (currentPos === position) currentPos++;
             updates.push(
               supabase
                 .from("cards")
@@ -188,25 +231,17 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
           await Promise.all(updates);
         } else {
-          console.log("Moving to different column");
-
-          // Moving to different column
-
-          // Step 1: Get cards from source column (excluding the moved card)
           const sourceColumnCards = cards
             .filter((c) => c.column_id === sourceColumnId && c.id !== cardId)
             .sort((a, b) => a.position - b.position);
 
-          // Step 2: Get cards from target column
           const targetColumnCards = cards
             .filter((c) => c.column_id === targetColumnId)
             .sort((a, b) => a.position - b.position);
 
-          // Step 3: Calculate new position in target column
           const position = newPosition || targetColumnCards.length + 1;
-
-          // Step 4: Update source column cards positions
           const updates = [];
+
           let sourcePos = 1;
           for (const card of sourceColumnCards) {
             updates.push(
@@ -221,11 +256,9 @@ export const useSupabaseKanban = (boardId: string | null) => {
             sourcePos++;
           }
 
-          // Step 5: Update target column cards positions
           let targetPos = 1;
           for (const card of targetColumnCards) {
             if (targetPos === position) {
-              // Insert the moved card at this position
               updates.push(
                 supabase
                   .from("cards")
@@ -238,7 +271,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
               );
               targetPos++;
             }
-
             updates.push(
               supabase
                 .from("cards")
@@ -251,14 +283,13 @@ export const useSupabaseKanban = (boardId: string | null) => {
             targetPos++;
           }
 
-          // If position is at the end
           if (position > targetColumnCards.length) {
             updates.push(
               supabase
                 .from("cards")
                 .update({
                   column_id: targetColumnId,
-                  position: position,
+                  position,
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", cardId)
@@ -268,25 +299,18 @@ export const useSupabaseKanban = (boardId: string | null) => {
           await Promise.all(updates);
         }
 
-        console.log("✅ Card moved successfully");
-
-        // Refresh data
         await fetchData();
       } catch (err) {
-        console.error("❌ Error moving card:", err);
+        console.error("Error moving card:", err);
         throw err;
       }
     },
     [cards, fetchData]
   );
 
-  // ✅ ADDED: Simple move card function (alternative)
   const moveCardSimple = useCallback(
     async (cardId: string, targetColumnId: string, newPosition?: number) => {
       try {
-        console.log("📦 Moving card:", cardId, "to column:", targetColumnId);
-
-        // Find the card in columns
         let cardToMove: CardType | null = null;
         let sourceColumnId = "";
 
@@ -299,49 +323,26 @@ export const useSupabaseKanban = (boardId: string | null) => {
           }
         }
 
-        if (!cardToMove) {
-          throw new Error("Card not found");
-        }
+        if (!cardToMove) throw new Error("Card not found");
 
-        console.log(
-          "Source column:",
-          sourceColumnId,
-          "Target column:",
-          targetColumnId
-        );
-
-        // If moving within same column
         if (sourceColumnId === targetColumnId) {
-          console.log("Moving within same column");
-
           const sourceColumn = columns.find((col) => col.id === sourceColumnId);
           if (!sourceColumn) throw new Error("Source column not found");
 
           const columnCards = sourceColumn.cards.filter((c) => c.id !== cardId);
-
-          // Calculate new position
           const position = newPosition || columnCards.length + 1;
-
-          // Update positions in database
           const updates = [];
 
-          // Update the moved card
           updates.push(
             supabase
               .from("cards")
-              .update({
-                position: position,
-                updated_at: new Date().toISOString(),
-              })
+              .update({ position, updated_at: new Date().toISOString() })
               .eq("id", cardId)
           );
 
-          // Update other cards positions
           let currentPos = 1;
           for (const card of columnCards) {
-            if (currentPos === position) {
-              currentPos++; // Skip the position where we inserted the moved card
-            }
+            if (currentPos === position) currentPos++;
             updates.push(
               supabase
                 .from("cards")
@@ -356,49 +357,32 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
           await Promise.all(updates);
 
-          // Update local state
           setColumns((prev) =>
             prev.map((col) => {
               if (col.id === sourceColumnId) {
                 const updatedCards = col.cards
-                  .map((card) => {
-                    if (card.id === cardId) {
-                      return { ...card, position };
-                    }
-                    return card;
-                  })
+                  .map((card) =>
+                    card.id === cardId ? { ...card, position } : card
+                  )
                   .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-
                 return { ...col, cards: updatedCards };
               }
               return col;
             })
           );
         } else {
-          console.log("Moving to different column");
-
           const sourceColumn = columns.find((col) => col.id === sourceColumnId);
           const targetColumn = columns.find((col) => col.id === targetColumnId);
-
-          if (!sourceColumn || !targetColumn) {
+          if (!sourceColumn || !targetColumn)
             throw new Error("Column not found");
-          }
 
-          // Step 1: Get cards from source column (excluding the moved card)
           const sourceColumnCards = sourceColumn.cards.filter(
             (c) => c.id !== cardId
           );
-
-          // Step 2: Get cards from target column
           const targetColumnCards = targetColumn.cards;
-
-          // Step 3: Calculate new position in target column
           const position = newPosition || targetColumnCards.length + 1;
-
-          // Step 4: Update in database
           const updates = [];
 
-          // Update source column cards positions
           let sourcePos = 1;
           for (const card of sourceColumnCards) {
             updates.push(
@@ -413,24 +397,20 @@ export const useSupabaseKanban = (boardId: string | null) => {
             sourcePos++;
           }
 
-          // Update target column cards positions and move the card
           updates.push(
             supabase
               .from("cards")
               .update({
                 column_id: targetColumnId,
-                position: position,
+                position,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", cardId)
           );
 
-          // Update other target column cards positions
           let targetPos = 1;
           for (const card of targetColumnCards) {
-            if (targetPos === position) {
-              targetPos++; // Skip for moved card
-            }
+            if (targetPos === position) targetPos++;
             updates.push(
               supabase
                 .from("cards")
@@ -445,67 +425,49 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
           await Promise.all(updates);
 
-          // Update local state immediately
           setColumns((prev) => {
-            // Remove card from source column
             const updatedColumns = prev.map((col) => {
               if (col.id === sourceColumnId) {
                 return {
                   ...col,
                   cards: col.cards
                     .filter((c) => c.id !== cardId)
-                    .map((card, index) => ({
-                      ...card,
-                      position: index + 1,
-                    })),
+                    .map((card, index) => ({ ...card, position: index + 1 })),
                 };
               }
               if (col.id === targetColumnId) {
-                // Add card to target column at correct position
                 const newCards = [...col.cards];
                 const movedCard = {
-                  ...cardToMove!,
+                  ...cardToMove,
                   column_id: targetColumnId,
                   position,
                 };
-
-                // Insert at correct position
                 newCards.splice(position - 1, 0, movedCard);
-
-                // Recalculate positions
                 const recalculatedCards = newCards.map((card, index) => ({
                   ...card,
                   position: index + 1,
                 }));
-
-                return {
-                  ...col,
-                  cards: recalculatedCards,
-                };
+                return { ...col, cards: recalculatedCards };
               }
               return col;
             });
-
             return updatedColumns;
           });
         }
-
-        console.log("✅ Card moved successfully");
       } catch (err) {
-        console.error("❌ Error moving card:", err);
+        console.error("Error moving card:", err);
         throw err;
       }
     },
     [columns]
   );
 
-  // Add column - simple version
-  const addColumn = async (title: string): Promise<void> => {
+  // Add Column
+  const addColumn = async (title: string) => {
     if (!boardId) throw new Error("No board selected");
 
     try {
       const maxPosition = Math.max(...columns.map((c) => c.position ?? 0), 0);
-
       const { data, error } = await supabase
         .from("columns")
         .insert({
@@ -519,7 +481,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
       if (error) throw error;
 
-      // Properly type the new column
       const newColumn: ColumnType = {
         id: data.id,
         title: data.title,
@@ -537,10 +498,12 @@ export const useSupabaseKanban = (boardId: string | null) => {
       throw err;
     }
   };
+
+  // Update Column
   const updateColumn = async (
     columnId: string,
     updates: { title?: string; color?: string; position?: number }
-  ): Promise<void> => {
+  ) => {
     if (!boardId) throw new Error("No board selected");
 
     try {
@@ -554,74 +517,52 @@ export const useSupabaseKanban = (boardId: string | null) => {
       if (error) throw error;
 
       setColumns((prev) =>
-        prev.map((col) => {
-          if (col.id === columnId) {
-            return {
-              ...col,
-              ...updates,
-              updated_at: data.updated_at ?? col.updated_at,
-            };
-          }
-          return col;
-        })
+        prev.map((col) =>
+          col.id === columnId
+            ? {
+                ...col,
+                ...updates,
+                updated_at: data.updated_at ?? col.updated_at,
+              }
+            : col
+        )
       );
     } catch (err) {
       console.error("Error updating column:", err);
       throw err;
     }
   };
+
+  // Remove Column
   const removeColumn = async (columnId: string) => {
     if (!boardId) throw new Error("No board selected");
 
-    // User confirmation
     const confirmed = window.confirm(
       "Are you sure you want to delete this column? All cards will be deleted."
     );
     if (!confirmed) return;
 
     try {
-      // Delete cards first
-      const { error: cardsError } = await supabase
-        .from("cards")
-        .delete()
-        .eq("column_id", columnId);
+      await supabase.from("cards").delete().eq("column_id", columnId);
+      await supabase.from("columns").delete().eq("id", columnId);
 
-      if (cardsError) throw cardsError;
-
-      // Delete column
-      const { error: columnError } = await supabase
-        .from("columns")
-        .delete()
-        .eq("id", columnId);
-
-      if (columnError) throw columnError;
-
-      // Update local state immediately
       setColumns((prev) => {
         const filtered = prev.filter((col) => col.id !== columnId);
-        // Positions ko fix karo
-        return filtered.map((col, index) => ({
-          ...col,
-          position: index,
-        }));
+        return filtered.map((col, index) => ({ ...col, position: index }));
       });
-
-      // Show success message (optional)
-      console.log("Column deleted successfully");
     } catch (err) {
       console.error("Error removing column:", err);
       alert("Failed to delete column");
       throw err;
     }
   };
-  // Add card - simple version
-  const addCard = async (columnId: string, title: string): Promise<void> => {
+
+  // Add Card
+  const addCard = async (columnId: string, title: string) => {
     try {
-      // ✅ Find the column first
       const column = columns.find((col) => col.id === columnId);
       if (!column) throw new Error("Column not found");
 
-      // ✅ Calculate max position in THIS column
       const maxPosition =
         column.cards.length > 0
           ? Math.max(...column.cards.map((card) => card.position ?? 0))
@@ -640,7 +581,6 @@ export const useSupabaseKanban = (boardId: string | null) => {
 
       if (error) throw error;
 
-      // Update local state
       const newCard: CardType = {
         id: data.id,
         title: data.title,
@@ -653,17 +593,10 @@ export const useSupabaseKanban = (boardId: string | null) => {
         updated_at: data.updated_at ?? undefined,
       };
 
-      // Add card to the correct column
       setColumns((prev) =>
-        prev.map((col) => {
-          if (col.id === columnId) {
-            return {
-              ...col,
-              cards: [...col.cards, newCard],
-            };
-          }
-          return col;
-        })
+        prev.map((col) =>
+          col.id === columnId ? { ...col, cards: [...col.cards, newCard] } : col
+        )
       );
     } catch (err) {
       console.error("Error adding card:", err);
@@ -671,20 +604,10 @@ export const useSupabaseKanban = (boardId: string | null) => {
     }
   };
 
-  // Get cards for column
-  const getCardsForColumn = (columnId: string): CardType[] => {
-    const column = columns.find((col) => col.id === columnId);
-    return column?.cards || [];
-  };
-
-  // Delete card
+  // Delete Card
   const deleteCard = async (cardId: string) => {
     try {
-      const { error } = await supabase.from("cards").delete().eq("id", cardId);
-
-      if (error) throw error;
-
-      // Update local sta te
+      await supabase.from("cards").delete().eq("id", cardId);
       setCards((prev) => prev.filter((card) => card.id !== cardId));
     } catch (err) {
       console.error("Error deleting card:", err);
@@ -692,20 +615,14 @@ export const useSupabaseKanban = (boardId: string | null) => {
     }
   };
 
-  // Update card
+  // Update Card
   const updateCard = async (cardId: string, updates: any) => {
     try {
-      const { error } = await supabase
+      await supabase
         .from("cards")
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq("id", cardId);
 
-      if (error) throw error;
-
-      // ✅ Update card in columns state
       setColumns((prev) =>
         prev.map((col) => ({
           ...col,
@@ -721,31 +638,26 @@ export const useSupabaseKanban = (boardId: string | null) => {
       throw err;
     }
   };
-  // useSupabaseKanban.ts - Update addComment function
-  // hooks/useSupabaseKanban.ts
 
-  // Add these functions inside your hook
-
-  // Add Comment
-  // Simplified version with any types
-
-  // useSupabaseKanban.ts - Debug version
-
-  return {
+  const value = {
     columns,
-    cards,
     loading,
     error,
-    setColumns,
     addColumn,
     addCard,
-    moveCard, // Full version with positioning
-    moveCardSimple, // Simple version (recommended for drag-drop)
-    deleteCard,
     updateCard,
-    getCardsForColumn,
-    refetch: fetchData,
+    deleteCard,
+    moveCard,
+    moveCardSimple,
     removeColumn,
     updateColumn,
+    refetch: fetchData,
+    updateCardComments,
+    setColumns,
+    getCardsForColumn,
   };
+
+  return (
+    <KanbanContext.Provider value={value}>{children}</KanbanContext.Provider>
+  );
 };
